@@ -1,0 +1,28 @@
+VILLA MAFALDA — LOCAL EXPERIENCES (SITO INDIPENDENTE)
+VERSIONE DI LAVORO / ANTEPRIMA PER I PARTNER
+
+STRUTTURA DA CARICARE NELLA RADICE DEL NUOVO REPOSITORY:
+
+index.html
+caseificio-rosola/index.html
+acetaia-sereni/index.html
+simonetta-garelli/index.html
+
+REPOSITORY DA CREARE:
+fgahousesolutions-gif/villa-mafalda-local-experiences
+
+GITHUB PAGES:
+Settings > Pages > Source: Deploy from a branch > main > /(root) > Save
+
+URL PREVISTO (SOLO DOPO LA PUBBLICAZIONE):
+https://fgahousesolutions-gif.github.io/villa-mafalda-local-experiences/
+
+IMPORTANTE:
+- Non caricare questi file sul repository villa-mafalda-guide.
+- Non modificare la guida attuale: nessun link dal vecchio sito a questo.
+- Link Guest Guide in alto a destra: solo navigazione DAL nuovo sito VERSO la guida esistente.
+- I contenuti e le immagini sono provvisori; ottenere approvazione dei partner prima del lancio definitivo.
+- Le immagini da siti terzi sono caricate da URL pubblici (richiedono rete e possono smettere di funzionare).
+- Tutte le pagine hanno noindex,nofollow perché sono bozze, ma saranno comunque accessibili pubblicamente via URL.
+- Le richieste email/WhatsApp vengono create sul dispositivo ospite e sono inviate solo dopo che l'ospite preme Invia.
+- Nessuna disponibilità o prenotazione reale verificata dalla pagina.
