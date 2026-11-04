@@ -1,0 +1,1 @@
+{"name":"villa-mafalda-simonetta","private":true,"type":"module","scripts":{"test":"node tests/workflow.test.mjs","check":"node --check src/worker.mjs && node --check public/guest.js && node --check public/private.js","dev":"node scripts/dev.mjs"},"engines":{"node":">=24"}}
