@@ -1,0 +1,18 @@
+# SOLO locale: copiare in .dev.vars (ignorato da Git).
+# Sostituire i due valori con segreti distinti generati localmente, >=32 caratteri.
+APP_SECRET=""
+OUTBOX_KEY=""
+# Non aggiungere EMAIL_SERVICE. APP_ENV=test impedisce ogni invio reale.
+SIMONETTA_EMAIL="chef@example.test"
+LAURA_EMAIL="laura@example.test"
+MAIL_FROM="experiences@example.test"
+PUBLIC_ORIGIN="http://127.0.0.1:8787"
+PRIVACY_CONTROLLER="Titolare fittizio per prove locali"
+PRIVACY_CONTACT="privacy@example.test"
+PRIVACY_VERSION="test-1"
+# Attivare solo per prove locali con dati fittizi.
+PRIVACY_READY="false"
+# Per Access reale: valori del proprio tenant e amministratori autorizzati.
+ACCESS_ISSUER=""
+ACCESS_AUD=""
+ADMIN_EMAILS=""

@@ -1,5 +1,11 @@
 # Architettura
 
+## Ambiente D1 TEST (5 novembre 2026)
+
+`wrangler.test.jsonc` isola nome Worker, binding D1 reale, persistenza locale e variabili dal manifest di produzione. Nessuna route, URL workers.dev, preview pubblica o cron è abilitata. `remote:false` impedisce il binding remoto durante sviluppo locale; non sostituisce il controllo del comando `--remote`, che qui non è stato eseguito. Tutti gli asset passano dal Worker prima di essere serviti; la gestione continua a richiedere JWT Access verificato. `APP_ENV=test` impedisce la consegna email a livello di codice.
+
+Wrangler e Miniflare sono fissati nel lockfile. La suite può usare SQLite in memoria oppure il vero binding D1 locale di workerd (`npm run test:d1`): ogni fixture riceve un database separato e le stesse migrazioni, suddivise con il parser SQL di Wrangler. Nessuna fixture o identità sintetica è inclusa nel bundle del Worker. Le 8 tabelle applicative e i 3 trigger sono compatibili con il runtime locale; il seed non è stato modificato. La prova contro il tenant Access e il D1 remoti resta successiva.
+
 ## Analisi della base
 
 La branch remota è stata verificata tramite il connettore GitHub. Il checkout disponibile inizialmente conteneva `511902d`, precedente al prototipo. Il trasporto Git dell'ambiente non raggiunge il proxy. Il commit di partenza `f10ad9d...`, l'albero `d3be8d5...` e il blob V3 `659b6fdd...` sono stati recuperati con il connettore e ricostruiti localmente, verificando gli hash esatti prima di passare alla branch di sviluppo.

@@ -1,1 +1,22 @@
-{"name":"villa-mafalda-simonetta","private":true,"type":"module","scripts":{"test":"node tests/workflow.test.mjs","check":"node --check src/worker.mjs && node --check public/guest.js && node --check public/private.js","dev":"node scripts/dev.mjs"},"engines":{"node":">=24"}}
+{
+  "name": "villa-mafalda-simonetta",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check src/worker.mjs && node --check public/guest.js && node --check public/private.js",
+    "dev": "node scripts/dev.mjs",
+    "test:d1": "TEST_D1=workerd node --test tests/workflow.test.mjs",
+    "d1:test:local": "wrangler d1 migrations apply DB --local --config wrangler.test.jsonc --persist-to .local/d1-test",
+    "d1:test:verify": "wrangler d1 execute DB --local --config wrangler.test.jsonc --persist-to .local/d1-test --file scripts/verify-d1.sql",
+    "build:test": "wrangler deploy --dry-run --config wrangler.test.jsonc --outdir .local/bundle-test",
+    "dev:test": "wrangler dev --local --config wrangler.test.jsonc --persist-to .local/d1-test --ip 127.0.0.1"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261104.0-beta",
+    "wrangler": "4.158.0"
+  }
+}

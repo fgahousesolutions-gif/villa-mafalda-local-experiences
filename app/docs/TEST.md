@@ -1,4 +1,35 @@
-# Verifiche del 4 novembre 2026
+# Verifiche del 5 novembre 2026 — preparazione D1 TEST
+
+## Esito aggiornato
+
+- Base recuperata con connettore GitHub e verificata file per file tramite hash Git; albero `c0efe0aa573f6c4a1b9ef89ad0a5e21cba81c807` e commit esatto `7162a991b279ac3fddc1728cbe7e68601e46a797`. Checkout isolato in `codex/simonetta-d1-test`; nessuna modifica ai file pubblici fuori da `app/`.
+- Node 24.22.1, Wrangler 4.158.0, Miniflare 5.20261104.0-beta e workerd 1.20261104.1. Versioni di sviluppo fissate e lockfile incluso. Nessuna dipendenza nel Worker di produzione.
+- **19 gruppi workflow superati su SQLite nativo**, **gli stessi 19 superati sul vero binding D1 locale di workerd**, più **2 verifiche** della configurazione separata e del blocco assoluto invio TEST. `npm test`, `npm run test:d1`, `npm run check` completati senza errori.
+- `npm run d1:test:local`: `0001.sql` e `0002_seed.sql` applicate con Wrangler esclusivamente in `.local/d1-test`. Ripetizione senza migrazioni da applicare; nessun duplicato. Nessuna modifica necessaria ai file SQL esistenti.
+- `npm run d1:test:verify`: 8 tabelle applicative (`settings`, `menus`, `blocks`, `requests`, `payments`, `audit`, `outbox`, `rate_limits`) più `d1_migrations`; trigger `booking_guard`, `payment_guard`, `correction_guard`; nessuna violazione `foreign_key_check`.
+- Seed: 3 menu attivi, ciascuno 220 €, solo `summer` stagionale; pasta 200 €, riferimento 220 €; condizioni IT/EN/DE/FR/ES. Portate e traduzioni confrontate con le fixture; Laura può spegnere estate via API senza modifiche al codice. Il seed non aggiunge richieste o dati personali.
+- `npm run build:test`: bundle generato localmente (45,41 KiB nella prova), binding DB TEST e asset validi, nessun upload. `workers_dev=false`, `preview_urls=false`, nessuna route, servizio email o cron.
+- Worker effettivo in `wrangler dev --local`, porta 8788: `/`, `/confirm`, `/api/config` rispondono 200; menu e prezzi corretti; `/admin`, `/admin.html`, API private e PDF rispondono 401 senza Access; creazione richieste risponde 503 finché privacy non pronta. Nessun bypass amministrativo nel bundle.
+- `node tests/browser.mjs`: superato nuovamente su Chromium locale, ospiti 390×844, gestione 360×800, desktop 1440×1000; cinque lingue, tre menu, pasta/max 6, totale, richiesta e archivio Laura, indisponibilità, rendiconti e conferma con importo modificato. Nessuna eccezione JavaScript o overflow nei layout controllati.
+- PDF locale `.local/report-test.pdf`: verificato con `pdfinfo` e `pdftotext`, PDF 1.4 A4, nessun JavaScript. Importo 1.200 €, commissione 120 €, versato 70 €, saldo 50 €.
+
+Le migrazioni sono state applicate tramite il comando D1 locale reale e tutti i workflow sono stati ripetuti contro l'API D1 locale, oltre all'adattatore SQLite. I test JWT usano sempre chiavi RSA e identità sintetiche; non simulano l'avvenuta configurazione del tenant Access reale.
+
+## Problemi risolti e limiti attuali
+
+Separazione TEST/produzione prima assente: aggiunto manifest dedicato con UUID fornito, comandi locali espliciti, SQL di verifica, guida remota e variabili documentate. Rafforzata la disabilitazione email: `APP_ENV=test` blocca anche un binding attivato per errore, verificato da test dedicato.
+
+Il trasporto Git e le operazioni npm nel sandbox iniziale non raggiungevano il proxy o non potevano scrivere la cache predefinita. Recupero tramite connettore GitHub, checkout isolato verificato, cache temporanea e rete autorizzata per installazione e server locali hanno consentito di completare i controlli. Non sono stati richiesti segreti o credenziali Cloudflare e non sono stati aggirati blocchi di destinazione. Il solo avviso Wrangler sul recupero di `Request.cf` ha usato il fallback locale e non ha impedito i test.
+
+Non eseguiti: accesso account Cloudflare, verifica dello stato effettivo del D1 remoto, migrazioni remote, deploy, creazione Access, modifica DNS, email reali, servizi a pagamento o merge su main. La ricerca in sola lettura sui repository FGA accessibili non ha identificato il provider indicato come “Twover”: evidenze e limiti in [EMAIL.md](EMAIL.md). Configurazione e istruzioni pronte in [TEST-CLOUDFLARE.md](TEST-CLOUDFLARE.md).
+
+Restano da verificare in seguito dominio e Access reali, permessi sul D1 remoto, provider email, informativa approvata e autorizzazione a pubblicare. Non sono stati eseguiti test su Safari/iOS fisico o screen reader. Le immagini/font esterni possono usare fallback nella rete limitata. Fixture giugno 2027 da aggiornare quando trascorse.
+
+---
+
+# Verifiche precedenti del 4 novembre 2026 (storico)
+
+Le limitazioni su Wrangler e sulla ricerca email nelle sezioni storiche seguenti sono aggiornate dall'esito del 5 novembre sopra.
 
 ## Esito
 

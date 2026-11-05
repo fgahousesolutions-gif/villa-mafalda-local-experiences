@@ -1,5 +1,7 @@
 # Configurazione e rilascio (da eseguire solo dopo autorizzazione)
 
+Aggiornamento TEST, 5 novembre 2026: usare [TEST-CLOUDFLARE.md](TEST-CLOUDFLARE.md) e `wrangler.test.jsonc`, già collegato al database esistente. Non creare un altro D1. Il manifest `wrangler.jsonc` e la tabella seguente restano relativi alla futura produzione. Per esito della ricerca email e adattatore vedere [EMAIL.md](EMAIL.md). Nel TEST `APP_ENV=test` impedisce gli invii anche in caso di modalità email configurata male.
+
 Nessuna istruzione qui è stata eseguita su infrastruttura remota. Non fare merge su main, non modificare Pages né la Guest Guide. Non collegare automaticamente questa branch a una pubblicazione di produzione.
 
 ## Configurazioni mancanti

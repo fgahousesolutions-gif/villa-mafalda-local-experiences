@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "villa-mafalda-simonetta-test",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "assets": {"directory": "public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none"},
+  "vars": {
+    "APP_ENV": "test",
+    "EMAIL_MODE": "disabled",
+    "RETENTION_DAYS": "365",
+    "TOKEN_HOURS": "168",
+    "PRIVACY_READY": "false",
+    "PUBLIC_ORIGIN": "",
+    "ACCESS_ISSUER": "",
+    "ACCESS_AUD": "",
+    "ADMIN_EMAILS": ""
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "villa-mafalda-simonetta-test",
+    "database_id": "f330dfd4-1724-40b3-b8c3-a73ec8e4056b",
+    "migrations_dir": "migrations",
+    "remote": false
+  }]
+}

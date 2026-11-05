@@ -17,7 +17,8 @@ export async function mailRows(db,env,r,kinds,token=''){
 }
 export function enqueue(db,rows,condition='1',params=[]){return rows.map(row=>db.prepare(`INSERT INTO outbox(id,request_id,payload,kind,next_at,created) SELECT ?,?,?,?,?,? WHERE ${condition}`).bind(row.id,row.request_id,row.payload,row.kind,row.created,row.created,...params))}
 export async function deliver(env){
- if(env.EMAIL_MODE!=='service'||!env.EMAIL_SERVICE)return;
+ // TEST remains unable to send even if an email binding is added by mistake.
+ if(env.APP_ENV==='test'||env.EMAIL_MODE!=='service'||!env.EMAIL_SERVICE)return;
  const db=env.DB,now=Date.now();
  const rows=(await db.prepare("SELECT * FROM outbox WHERE state IN ('pending','retry') AND next_at<=? AND lease_until<? LIMIT 20").bind(now,now).all()).results;
  for(const r of rows){
