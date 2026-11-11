@@ -38,6 +38,8 @@ Casi coperti: registrazione, rollback, ricevute cifrate, contenuto e destinatari
 
 I primi tentativi di workerd e logging Wrangler sono stati limitati dalla sandbox (porta localhost e percorso log); ripetuti con autorizzazione e superati. Il browser grafico non è disponibile nell’ambiente: non è stata eseguita una nuova verifica visiva o end-to-end nel browser. I test DOM non sostituiscono la verifica visiva responsive. I file CSS/HTML e i contenuti dei menu non sono stati modificati.
 
+**Blocco preventivo richieste (aggiornamento successivo al rilascio TEST):** la UI e l'endpoint POST usano lo stesso controllo. Online le richieste si possono abilitare solo con `APP_ENV=production`, privacy completa e `EMAIL_MODE=resend` con `RESEND_API_KEY` configurata, oppure `EMAIL_MODE=service` con binding `EMAIL_SERVICE` presente. Il TEST resta chiuso anche se `PRIVACY_READY` fosse attivato per errore. Le prove locali usano `APP_ENV=development`, `LOCAL_DEV=true` e `EMAIL_MODE=capture`, soltanto con origine HTTP di loopback. La presenza del trasporto non certifica la consegna: effettuare un test reale controllato prima del rilascio.
+
 ## Aggiornare successivamente il solo TEST online
 
 Operazioni future, **non eseguite**, da fare solo dopo autorizzazione:

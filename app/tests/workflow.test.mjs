@@ -54,6 +54,26 @@ test('Estate: nessuna data predefinita, finestra Laura inclusiva, revoca e difes
  await assert.rejects(()=>env.DB.prepare(`INSERT INTO requests(${fields.join(',')}) VALUES(${fields.map(()=>'?').join(',')})`).bind(...fields.map(k=>k==='id'?'SUMMER-RACE':k==='idem'?crypto.randomUUID():k==='token_hash'?'summer-race':saved[k])).run(),/SUMMER_UNAVAILABLE/);
  cfg=await (await call(env,'/api/config')).json();assert.equal(cfg.summerWindow,null);assert.ok(cfg.menus.some(m=>m.id==='summer'));
 });
+test('Richieste: trasporto email obbligatorio per il frontend e l’API',async()=>{
+ const env=environment(auth);
+ async function blocked(){
+  const cfg=await (await call(env,'/api/config')).json();assert.equal(cfg.requestsEnabled,false);
+  const res=await create(env);assert.equal(res.response.status,503);assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM requests').first()).n,0);
+ }
+ env.APP_ENV='test';env.EMAIL_MODE='disabled';await blocked();
+ env.EMAIL_MODE='resend';env.RESEND_API_KEY='fixture-only';await blocked();
+ env.APP_ENV='production';env.EMAIL_MODE='disabled';await blocked();
+ env.EMAIL_MODE='resend';delete env.RESEND_API_KEY;await blocked();
+ env.EMAIL_MODE='service';delete env.EMAIL_SERVICE;await blocked();
+ env.EMAIL_MODE='resend';env.RESEND_API_KEY='fixture-only';
+ assert.equal((await (await call(env,'/api/config')).json()).requestsEnabled,true);
+ env.EMAIL_MODE='service';delete env.RESEND_API_KEY;env.EMAIL_SERVICE={fetch:async()=>Response.json({ok:true})};
+ assert.equal((await (await call(env,'/api/config')).json()).requestsEnabled,true);
+ const local=environment(auth);local.LOCAL_DEV='false';
+ assert.equal((await (await call(local,'/api/config')).json()).requestsEnabled,false);
+ local.LOCAL_DEV='true';local.PUBLIC_ORIGIN='https://example.test';
+ assert.equal((await (await call(local,'/api/config')).json()).requestsEnabled,false);
+});
 test('Configurazione pubblica segnala richieste disattivate senza esporre segreti',async()=>{
  const env=environment(auth);env.PRIVACY_READY='false';delete env.APP_SECRET;
  const res=await call(env,'/api/config');assert.equal(res.status,200);const cfg=await res.json();assert.equal(cfg.requestsEnabled,false);assert.equal(cfg.menus.length,3);assert.equal(cfg.OUTBOX_KEY,undefined);

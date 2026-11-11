@@ -11,12 +11,17 @@ async function body(req){if(Number(req.headers.get('content-length'))>50000)fail
 function writeOrigin(req,url){if(!['GET','HEAD'].includes(req.method)&&req.headers.get('origin')!==url.origin)fail('Origine non autorizzata.',403)}
 async function rate(req,env,scope,limit){const ip=req.headers.get('CF-Connecting-IP');if(!ip&&env.LOCAL_DEV!=='true')fail('Configurazione rete incompleta.',503);const now=Date.now(),key=await mac(env.APP_SECRET,scope+':'+(ip||'local')+':'+Math.floor(now/3600000));const r=await env.DB.prepare('INSERT INTO rate_limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count').bind(key,now+3600000).first();if(r.count>limit)fail('Troppi tentativi. Riprova più tardi.',429)}
 async function config(db){const row=await one(db,'SELECT * FROM settings WHERE id=1');return {...JSON.parse(row.data),version:row.version}}
-const requestsEnabled=env=>env.PRIVACY_READY==='true'&&!!env.PRIVACY_CONTROLLER&&!!env.PRIVACY_CONTACT&&!!env.APP_SECRET&&!!env.OUTBOX_KEY&&!!env.PUBLIC_ORIGIN&&!!env.SIMONETTA_EMAIL&&!!env.LAURA_EMAIL&&!!env.MAIL_FROM;
+// Production requests need a configured email sender. Capture mode is for loopback development only.
+function localEmailCapture(env){
+ if(env.APP_ENV!=='development'||env.LOCAL_DEV!=='true'||env.EMAIL_MODE!=='capture')return false;
+ try{const origin=new URL(env.PUBLIC_ORIGIN);return origin.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(origin.hostname)}catch{return false}
+}
+const liveEmailReady=env=>env.APP_ENV==='production'&&((env.EMAIL_MODE==='resend'&&!!env.RESEND_API_KEY)||(env.EMAIL_MODE==='service'&&!!env.EMAIL_SERVICE));
+const requestsEnabled=env=>(liveEmailReady(env)||localEmailCapture(env))&&env.PRIVACY_READY==='true'&&!!env.PRIVACY_CONTROLLER&&!!env.PRIVACY_CONTACT&&!!env.APP_SECRET&&!!env.OUTBOX_KEY&&!!env.PUBLIC_ORIGIN&&!!env.SIMONETTA_EMAIL&&!!env.LAURA_EMAIL&&!!env.MAIL_FROM;
 async function publicConfig(env){const db=env.DB,settings=await config(db);return {requestsEnabled:requestsEnabled(env),summerWindow:settings.summerWindow||null,menus:(await all(db,'SELECT * FROM menus')).map(r=>({...JSON.parse(r.data),version:r.version})).filter(m=>m.active||m.id==='summer'),pastaPrice:settings.pastaPrice,referencePrice:settings.referencePrice,conditions:settings.conditions,blocks:await all(db,'SELECT start AS "from",end AS "to",experience FROM blocks WHERE end>=?',today())}}
 function storedMenu(m){const {version,...data}=m;return data}
 async function requestCreate(req,env,ctx){
- if(env.PRIVACY_READY!=='true'||!env.PRIVACY_CONTROLLER||!env.PRIVACY_CONTACT)fail('Il servizio richieste non è ancora attivo.',503);
- if(!env.OUTBOX_KEY||!env.PUBLIC_ORIGIN||!env.SIMONETTA_EMAIL||!env.LAURA_EMAIL||!env.MAIL_FROM)fail('Configurazione del servizio incompleta.',503);
+ if(!requestsEnabled(env))fail('Il servizio richieste non è ancora attivo.',503);
  const b=await body(req),r=booking(b),db=env.DB;
  const idem=req.headers.get('Idempotency-Key');if(!idem||!/^[0-9a-f-]{36}$/i.test(idem))fail('Identificativo invio non valido.');
  const fingerprint=await hash(JSON.stringify(r));
