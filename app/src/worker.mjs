@@ -11,7 +11,8 @@ async function body(req){if(Number(req.headers.get('content-length'))>50000)fail
 function writeOrigin(req,url){if(!['GET','HEAD'].includes(req.method)&&req.headers.get('origin')!==url.origin)fail('Origine non autorizzata.',403)}
 async function rate(req,env,scope,limit){const ip=req.headers.get('CF-Connecting-IP');if(!ip&&env.LOCAL_DEV!=='true')fail('Configurazione rete incompleta.',503);const now=Date.now(),key=await mac(env.APP_SECRET,scope+':'+(ip||'local')+':'+Math.floor(now/3600000));const r=await env.DB.prepare('INSERT INTO rate_limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count').bind(key,now+3600000).first();if(r.count>limit)fail('Troppi tentativi. Riprova più tardi.',429)}
 async function config(db){const row=await one(db,'SELECT * FROM settings WHERE id=1');return {...JSON.parse(row.data),version:row.version}}
-async function publicConfig(db){const settings=await config(db);return {menus:(await all(db,'SELECT * FROM menus')).map(r=>({...JSON.parse(r.data),version:r.version})).filter(m=>m.active),pastaPrice:settings.pastaPrice,referencePrice:settings.referencePrice,conditions:settings.conditions,blocks:await all(db,'SELECT start AS "from",end AS "to",experience FROM blocks WHERE end>=?',today())}}
+const requestsEnabled=env=>env.PRIVACY_READY==='true'&&!!env.PRIVACY_CONTROLLER&&!!env.PRIVACY_CONTACT&&!!env.APP_SECRET&&!!env.OUTBOX_KEY&&!!env.PUBLIC_ORIGIN&&!!env.SIMONETTA_EMAIL&&!!env.LAURA_EMAIL&&!!env.MAIL_FROM;
+async function publicConfig(env){const db=env.DB,settings=await config(db);return {requestsEnabled:requestsEnabled(env),summerWindow:settings.summerWindow||null,menus:(await all(db,'SELECT * FROM menus')).map(r=>({...JSON.parse(r.data),version:r.version})).filter(m=>m.active||m.id==='summer'),pastaPrice:settings.pastaPrice,referencePrice:settings.referencePrice,conditions:settings.conditions,blocks:await all(db,'SELECT start AS "from",end AS "to",experience FROM blocks WHERE end>=?',today())}}
 function storedMenu(m){const {version,...data}=m;return data}
 async function requestCreate(req,env,ctx){
  if(env.PRIVACY_READY!=='true'||!env.PRIVACY_CONTROLLER||!env.PRIVACY_CONTACT)fail('Il servizio richieste non è ancora attivo.',503);
@@ -26,7 +27,7 @@ async function requestCreate(req,env,ctx){
  const [stamp,nonce,signature]=String(b.challenge||'').split('.');const age=Date.now()-Number(stamp);
  if(!nonce||signature!==await mac(env.APP_SECRET,stamp+'.'+nonce)||age<2000||age>7200000)fail('Aggiorna la pagina e riprova tra qualche secondo.');
  const settings=await config(db);let menu=null;
- if(r.experience==='dinner'){const m=await one(db,'SELECT data FROM menus WHERE id=?',r.menuId);if(!m||!JSON.parse(m.data).active)fail('Menu non disponibile.',409);menu=JSON.parse(m.data)}
+ if(r.experience==='dinner'){const m=await one(db,'SELECT data FROM menus WHERE id=?',r.menuId);if(!m||(!JSON.parse(m.data).active&&r.menuId!=='summer'))fail('Menu non disponibile.',409);menu=JSON.parse(m.data);if(menu.id==='summer'&&(!settings.summerWindow||r.date<settings.summerWindow.start||r.date>settings.summerWindow.end))fail('Il menu estivo è visibile tutto l’anno, ma è richiedibile solo nella finestra configurata da Laura. Al momento la data scelta non è disponibile.',409)}
  const price=r.experience==='dinner'?menu.price:settings.pastaPrice;
  if(b.expectedUnit!==price)fail('Il prezzo è stato aggiornato. Ricarica la pagina prima di inviare.',409);
  const token=randomToken(),now=Date.now();const row={id:'VM-SIM-'+crypto.randomUUID().toUpperCase(),...r,menu_id:r.menuId,initial:cents(price)*r.people,final:null,status:'requested',preferred_time:r.time,snapshot:JSON.stringify({menu,conditions:settings.conditions,unitPrice:price,pastaReference:settings.referencePrice,privacyVersion:env.PRIVACY_VERSION||'1'}),token_hash:await hash(token),token_expires:now+Number(env.TOKEN_HOURS||168)*3600000,created:now};
@@ -35,7 +36,7 @@ async function requestCreate(req,env,ctx){
  const values={...row,idem,fingerprint};
  try{await db.batch([db.prepare(`INSERT INTO requests(${fields.join(',')}) VALUES(${fields.map(()=>'?').join(',')})`).bind(...fields.map(f=>values[f])),...enqueue(db,mails),audit(db,'guest','request.created',{initial:row.initial},row.id)])}catch(e){
   prior=await one(db,'SELECT id,fingerprint,initial FROM requests WHERE idem=?',idem);if(prior?.fingerprint===fingerprint)return json({id:prior.id,initial:prior.initial,registered:true,emailQueued:true});
-  if(/DATE_UNAVAILABLE|MENU_CHANGED|PRICE_CHANGED/.test(e.message))fail('Disponibilità o menu aggiornati. Ricarica la pagina e scegli di nuovo.',409);throw e;
+  if(/DATE_UNAVAILABLE|MENU_CHANGED|SUMMER_UNAVAILABLE|PRICE_CHANGED/.test(e.message))fail('Disponibilità o menu aggiornati. Ricarica la pagina e scegli di nuovo.',409);throw e;
  }
  ctx.waitUntil(deliver(env));return json({id:row.id,initial:row.initial,registered:true,emailQueued:true},201);
 }
@@ -61,11 +62,11 @@ async function change(req,env,ctx,r,actor,admin=false){
 function validateMenu(b,id){
  const m=storedMenu(b);if(!['traditional','elegance','summer'].includes(id)||m.id!==id)fail('Menu non valido.');str(m.name,120,2);str(m.summary,1000);str(m.tag,100);for(const l of ['en','de','fr','es']){str(m[l+'Summary'],1000,1);str(m[l+'Tag'],100,1)}cents(m.price);if(typeof m.active!=='boolean'||typeof m.seasonal!=='boolean'||!Array.isArray(m.courses)||m.courses.length<1||m.courses.length>12)fail('Menu non valido.');
  for(const c of m.courses){for(const l of ['','en','de','fr','es']){const label=l?l+'Label':'label',items=l?l+'Items':'items';str(c[label],100,1);if(!Array.isArray(c[items])||!c[items].length||c[items].length>15)fail('Inserisci le portate in tutte le lingue.');c[items].forEach(x=>str(x,1000,1))}}
- return m;
+ if(id==='summer'){m.active=true;m.seasonal=true}return m;
 }
 async function adminRoute(req,url,env,ctx,actor){
  const db=env.DB,path=url.pathname,b=async()=>body(req);
- if(path==='/api/admin/data'&&req.method==='GET')return json({requests:await all(db,'SELECT id,name,email,phone,checkin,checkout,date,experience,menu_id,snapshot,people,initial,final,status,notes,lang,preferred_time,created,confirmed_at,completed_at,message,version FROM requests ORDER BY date DESC'),menus:(await all(db,'SELECT * FROM menus')).map(m=>({...JSON.parse(m.data),version:m.version})),settings:await config(db),blocks:await all(db,'SELECT * FROM blocks ORDER BY start'),payments:await all(db,'SELECT * FROM payments ORDER BY date'),audit:await all(db,'SELECT * FROM audit ORDER BY id DESC LIMIT 300'),outbox:await all(db,'SELECT id,request_id,state,attempts,next_at,last_error FROM outbox ORDER BY created DESC LIMIT 200'),emailMode:env.EMAIL_MODE||'disabled'});
+ if(path==='/api/admin/data'&&req.method==='GET')return json({requests:await all(db,'SELECT id,name,email,phone,checkin,checkout,date,experience,menu_id,snapshot,people,initial,final,status,notes,lang,preferred_time,created,confirmed_at,completed_at,message,version FROM requests ORDER BY date DESC'),menus:(await all(db,'SELECT * FROM menus')).map(m=>({...JSON.parse(m.data),version:m.version})),settings:await config(db),blocks:await all(db,'SELECT * FROM blocks ORDER BY start'),payments:await all(db,'SELECT * FROM payments ORDER BY date'),audit:await all(db,'SELECT * FROM audit ORDER BY id DESC LIMIT 300'),outbox:await all(db,'SELECT id,request_id,state,attempts,next_at,last_error FROM outbox ORDER BY created DESC LIMIT 200'),emailMode:env.APP_ENV==='test'?'disabled':env.EMAIL_MODE||'disabled'});
  const rid=path.match(/^\/api\/admin\/requests\/([^/]+)$/);
  if(rid&&req.method==='PATCH'){const r=await one(db,'SELECT * FROM requests WHERE id=?',rid[1]);if(!r)fail('Richiesta non trovata.',404);return change(req,env,ctx,r,actor,true)}
  const resend=path.match(/^\/api\/admin\/requests\/([^/]+)\/link$/);
@@ -92,7 +93,8 @@ async function adminRoute(req,url,env,ctx,actor){
  }
  if(path==='/api/admin/settings'&&req.method==='PUT'){
   const x=await b(),old=await config(db);cents(x.pastaPrice);cents(x.referencePrice);if(!x.conditions||!['it','en','de','fr','es'].every(l=>x.conditions[l])||Object.keys(x.conditions).some(k=>!['it','en','de','fr','es'].includes(k)))fail('Condizioni non valide.');for(const t of Object.values(x.conditions)){str(t.included,2000,1);str(t.excluded,2000,1)}
-  const next={pastaPrice:x.pastaPrice,referencePrice:x.referencePrice,conditions:x.conditions};const res=await db.batch([db.prepare('UPDATE settings SET data=?,version=version+1 WHERE id=1 AND version=?').bind(JSON.stringify(next),x.version),db.prepare('INSERT INTO audit(actor,action,data,created) SELECT ?,?,?,? WHERE changes()=1').bind(actor,'settings.changed',JSON.stringify({old,new:next}),Date.now())]);if(!res[0].meta.changes)fail('Configurazione già aggiornata.',409);return json({ok:true})
+  const w=x.summerWindow??null;if(w!==null&&(!date(w.start)||!date(w.end)||w.start>w.end))fail('Imposta entrambe le date della finestra estiva, in ordine cronologico.');
+  const next={summerWindow:w,pastaPrice:x.pastaPrice,referencePrice:x.referencePrice,conditions:x.conditions};const res=await db.batch([db.prepare('UPDATE settings SET data=?,version=version+1 WHERE id=1 AND version=?').bind(JSON.stringify(next),x.version),db.prepare('INSERT INTO audit(actor,action,data,created) SELECT ?,?,?,? WHERE changes()=1').bind(actor,'settings.changed',JSON.stringify({old,new:next}),Date.now())]);if(!res[0].meta.changes)fail('Configurazione già aggiornata.',409);return json({ok:true})
  }
  if(path==='/api/admin/payments'&&req.method==='POST'){
   const x=await b(),amount=cents(x.amount);if(!date(x.date)||x.date>today())fail('Data pagamento non valida.');const id=str(x.id,36,36);if(!/^[a-f0-9-]{36}$/i.test(id))fail('Identificativo pagamento non valido.');const prior=await one(db,'SELECT * FROM payments WHERE id=?',id);if(prior){if(prior.request_id===x.requestId&&prior.cents===amount&&prior.date===x.date&&prior.reference===x.reference)return json({ok:true});fail('Pagamento già utilizzato.',409)}
@@ -111,7 +113,7 @@ async function route(req,env,ctx){
   const actor=await authorize(req,env);if(path.startsWith('/api/'))return adminRoute(req,url,env,ctx,actor);
   return env.ASSETS.fetch(new Request(url.origin+'/admin.html',req));
  }
- if(path==='/api/config'&&req.method==='GET')return json(await publicConfig(env.DB));
+ if(path==='/api/config'&&req.method==='GET')return json(await publicConfig(env));
  if(path==='/api/challenge'&&req.method==='GET'){await rate(req,env,'challenge',60);const data=Date.now()+'.'+randomToken();return json({challenge:data+'.'+await mac(env.APP_SECRET,data)})}
  if(path==='/api/requests'&&req.method==='POST')return requestCreate(req,env,ctx);
  if(path==='/api/confirm'&&['GET','POST'].includes(req.method)){await rate(req,env,'confirm',120);const row=await tokenRequest(req,env);return req.method==='GET'?json(summary(row)):change(req,env,ctx,row,'simonetta')}
@@ -123,7 +125,7 @@ async function route(req,env,ctx){
  return env.ASSETS.fetch(req);
 }
 export default {
- async fetch(req,env,ctx){let res;try{res=await route(req,env,ctx)}catch(e){const known=/DATE_UNAVAILABLE|MENU_CHANGED|PRICE_CHANGED|INVALID_PAYMENT|PAYMENTS_EXIST/.test(e.message);res=json({error:e.status?e.message:known?'Operazione non consentita: controlla disponibilità, importi e pagamenti già registrati.':'Servizio temporaneamente non disponibile. La registrazione non è stata confermata; riprova con gli stessi dati.',code:e.status|| (known?409:503)},e.status||(known?409:503))}
+ async fetch(req,env,ctx){let res;try{res=await route(req,env,ctx)}catch(e){const known=/DATE_UNAVAILABLE|MENU_CHANGED|SUMMER_UNAVAILABLE|PRICE_CHANGED|INVALID_PAYMENT|PAYMENTS_EXIST/.test(e.message);res=json({error:e.status?e.message:known?'Operazione non consentita: controlla disponibilità, importi e pagamenti già registrati.':'Servizio temporaneamente non disponibile. La registrazione non è stata confermata; riprova con gli stessi dati.',code:e.status|| (known?409:503)},e.status||(known?409:503))}
   const headers=new Headers(res.headers);headers.set('Cache-Control','no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','no-referrer');headers.set('X-Frame-Options','DENY');headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://storage.googleapis.com; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");return new Response(res.body,{status:res.status,headers});
  },
  async scheduled(event,env,ctx){ctx.waitUntil((async()=>{await deliver(env);const days=Number(env.RETENTION_DAYS);if(!Number.isInteger(days)||days<30||days>3650)return;const cutoff=Date.now()-days*86400000;await env.DB.batch([env.DB.prepare("DELETE FROM requests WHERE created<? AND status IN ('declined','cancelled','requested')").bind(cutoff),env.DB.prepare("DELETE FROM requests WHERE created<? AND status='completed' AND (experience='pasta' OR COALESCE((SELECT SUM(cents) FROM payments WHERE request_id=requests.id),0)>=CAST(ROUND(final*0.1) AS INTEGER))").bind(cutoff),env.DB.prepare('DELETE FROM audit WHERE created<?').bind(cutoff),env.DB.prepare('DELETE FROM rate_limits WHERE expires<?').bind(Date.now())])})())}

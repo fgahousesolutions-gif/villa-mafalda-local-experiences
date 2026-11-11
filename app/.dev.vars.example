@@ -16,3 +16,9 @@ PRIVACY_READY="false"
 ACCESS_ISSUER=""
 ACCESS_AUD=""
 ADMIN_EMAILS=""
+
+# SOLO futura produzione: chiave dedicata Simonetta da inserire come secret Cloudflare.
+# Non riutilizzare chiavi Tower. Nessuna chiave reale in questo file.
+# RESEND_API_KEY=""
+# L'adattatore richiede APP_ENV=production e EMAIL_MODE=resend.
+# In TEST mantenere APP_ENV=test e EMAIL_MODE=disabled.

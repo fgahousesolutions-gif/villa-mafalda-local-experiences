@@ -1,12 +1,12 @@
 import {DatabaseSync} from 'node:sqlite';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {b64} from '../src/security.mjs';
 export const appRoot=fileURLToPath(new URL('../',import.meta.url));
 const realD1=process.env.TEST_D1==='workerd' ? await import('./workerd-d1.mjs') : null;
 export class D1 {
- constructor(filename=':memory:'){if(realD1)return new realD1.WorkerdD1();this.sqlite=new DatabaseSync(filename);this.sqlite.exec('PRAGMA foreign_keys=ON;');this.sqlite.exec(readFileSync(path.join(appRoot,'migrations/0001.sql'),'utf8'));this.sqlite.exec(readFileSync(path.join(appRoot,'migrations/0002_seed.sql'),'utf8'))}
+ constructor(filename=':memory:'){if(realD1)return new realD1.WorkerdD1();this.sqlite=new DatabaseSync(filename);this.sqlite.exec('PRAGMA foreign_keys=ON;');for(const file of readdirSync(path.join(appRoot,'migrations')).filter(f=>f.endsWith('.sql')).sort())this.sqlite.exec(readFileSync(path.join(appRoot,'migrations',file),'utf8'))}
  prepare(sql){const self=this;return {sql,args:[],bind(...args){return {...this,args}},async first(){return self.sqlite.prepare(this.sql).get(...this.args)||null},async all(){return {results:self.sqlite.prepare(this.sql).all(...this.args)}},async run(){const r=self.sqlite.prepare(this.sql).run(...this.args);return {meta:{changes:Number(r.changes),last_row_id:Number(r.lastInsertRowid)}}}}}
  async batch(items){this.sqlite.exec('BEGIN');try{const results=[];for(const s of items){const r=this.sqlite.prepare(s.sql).run(...s.args);results.push({meta:{changes:Number(r.changes),last_row_id:Number(r.lastInsertRowid)}})}this.sqlite.exec('COMMIT');return results}catch(e){this.sqlite.exec('ROLLBACK');throw e}}
 }

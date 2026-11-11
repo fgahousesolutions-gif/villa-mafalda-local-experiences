@@ -1,5 +1,8 @@
 # Villa Mafalda · Simonetta operativa
 
+Preparazione locale aggiornata: [email Resend isolata, finestra estiva, test e consegna](docs/PREPARAZIONE-EMAIL-TEST.md). Nessun aggiornamento remoto: `wrangler.test.jsonc` reale conservato, richieste TEST disattivate ed email TEST sempre bloccate.
+
+
 Preparazione D1 TEST del 5 novembre 2026: [guida semplice](docs/TEST-CLOUDFLARE.md). La configurazione separata `wrangler.test.jsonc` contiene il database TEST già creato (`f330dfd4-1724-40b3-b8c3-a73ec8e4056b`). Migrazioni e bundle verificati localmente con Wrangler; nessun deploy o migrazione remota. Per il TEST seguire questa guida, che aggiorna le indicazioni generali qui sotto.
 
 Sviluppo nella branch `feature/simonetta-online`, a partire dal commit approvato `f10ad9d401b936d2da87f6fc1a6a9dd902da4b0b` e dal prototipo `prototype/simonetta-v3-approvata.html`.

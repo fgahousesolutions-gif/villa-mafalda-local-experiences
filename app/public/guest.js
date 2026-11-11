@@ -26,7 +26,7 @@ function renderMenu(m,i){
  return `<article class="tasting-menu ${active?'selected':''}" id="menu-${esc(m.id)}" data-menu="${esc(m.id)}"><div class="menu-side"><div class="menu-side-body"><span class="menu-num">${String(i+1).padStart(2,'0')} / 03 · SIMONETTA GARELLI</span><p class="section-kicker">${esc(m[selectedLanguage+'Tag']||m.tag)}</p><h3>${esc(headline)}</h3><p>${esc(m[selectedLanguage+'Summary']||m.summary)}</p>${m.seasonal?`<span class="summer-tag">☀ ${esc(text('summer'))}</span>`:''}</div><div class="menu-side-price"><strong>${money(m.price)}</strong><span>${esc(text('perPerson'))}</span></div></div><div class="menu-body"><span class="menu-overline">${esc(text('tasting'))}</span>${courses}<button type="button" class="menu-action ${active?'selected':''}" data-select="${esc(m.id)}">${esc(text(active?'selected':'chooseMenu'))} &nbsp; ${active?'':'→'}</button><p class="menu-small">${esc(text('menuHelp'))}</p></div></article>`;
 }
 function renderMenus(){
- const available=state.menus.filter(x=>x.active);
+ const available=state.menus.filter(x=>x.active||x.id==='summer');
  if(!available.some(x=>x.id===chosenMenu))chosenMenu=available[0]?.id||'traditional';
  $('menu-list').innerHTML=available.map(renderMenu).join('');
  $('menu-index').innerHTML=available.map(m=>`<button class="${chosenMenu===m.id?'selected':''}" type="button" data-jump="${esc(m.id)}">${esc(m.name)} ${m.seasonal?'☀':''}</button>`).join('');
@@ -44,7 +44,7 @@ function renderGuestSummary(){let people=Math.max(1,Number($('guest-people').val
  if(date&&blocked(date))message=text('unavailable');
  else if(from&&to&&to<=from)message=text('unavailable');
  else if(date&&from&&to&&(date<from||date>=to))message=text('unavailable');
- alert.textContent=message;alert.classList.toggle('show',!!message);
+ message=requestNotice()||message;updateRequestState();alert.textContent=message;alert.classList.toggle('show',!!message);
 }
 function calendar(){let days=new Date(calendarYear,calendarMonth,0).getDate(),offset=(new Date(calendarYear,calendarMonth-1,1).getDay()+6)%7;
  $('cal-title').textContent=new Intl.DateTimeFormat(selectedLanguage,{month:'long',year:'numeric'}).format(new Date(calendarYear,calendarMonth-1,1));
@@ -70,17 +70,35 @@ for(const l of Object.keys(live))Object.assign(T[l],live[l],{consent:ack[l]});
 const todayISO=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Rome'}).format(new Date());
 let challenge='',ready=false,submitted=false;
 const originalLanguage=setLanguage;
-setLanguage=function(l){originalLanguage(l);$('privacy-link').textContent=text('privacyLabel');$('privacy-link').href='/privacy?lang='+selectedLanguage;$('date-alert').textContent=$('date-alert').classList.contains('show')?text('unavailable'):'';applyConditions();const labels={it:['Da concordare','Pranzo','Cena'],en:['To be agreed','Lunch','Dinner'],de:['Nach Vereinbarung','Mittagessen','Abendessen'],fr:['À convenir','Déjeuner','Dîner'],es:['A convenir','Almuerzo','Cena']}[selectedLanguage];[...$('guest-time').options].forEach((o,i)=>o.textContent=labels[i])};
+setLanguage=function(l){originalLanguage(l);$('privacy-link').textContent=text('privacyLabel');$('privacy-link').href='/privacy?lang='+selectedLanguage;applyConditions();const labels={it:['Da concordare','Pranzo','Cena'],en:['To be agreed','Lunch','Dinner'],de:['Nach Vereinbarung','Mittagessen','Abendessen'],fr:['À convenir','Déjeuner','Dîner'],es:['A convenir','Almuerzo','Cena']}[selectedLanguage];[...$('guest-time').options].forEach((o,i)=>o.textContent=labels[i])};
 function applyConditions(){const c=state.conditions?.[selectedLanguage]||(selectedLanguage==='it'?state.conditions?.it:null);if(c){document.querySelector('[data-i="included"]').textContent=c.included;document.querySelector('[data-i="excluded"]').textContent=c.excluded}}
 async function api(path,options={}){const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers}});const b=await r.json();if(!r.ok)throw new Error(b.error||text('error'));return b}
+const availabilityText={
+ it:['Le richieste non sono ancora attive. Puoi consultare tutte le esperienze e i menu.','Menu estivo visibile tutto l’anno. Le richieste sono sospese finché Laura non configura la finestra estiva.','Per il menu estivo scegli una data dal'],
+ en:['Requests are not active yet. You can browse all experiences and menus.','The summer menu is visible year-round. Requests are paused until Laura sets the summer window.','For the summer menu, choose a date from'],
+ de:['Anfragen sind noch nicht aktiv. Alle Erlebnisse und Menüs sind einsehbar.','Das Sommermenü ist ganzjährig sichtbar. Anfragen sind erst möglich, wenn Laura den Sommerzeitraum festlegt.','Für das Sommermenü wählen Sie ein Datum im Zeitraum'],
+ fr:['Les demandes ne sont pas encore ouvertes. Toutes les expériences et les menus restent consultables.','Le menu estival reste visible toute l’année. Les demandes attendent la période définie par Laura.','Pour le menu estival, choisissez une date dans la période'],
+ es:['Las solicitudes aún no están activas. Puedes consultar todas las experiencias y menús.','El menú de verano está visible todo el año. Las solicitudes esperan a que Laura configure el período de verano.','Para el menú de verano, elige una fecha en el período']
+};
+function requestNotice(){
+ const t=availabilityText[selectedLanguage];
+ if(state.requestsEnabled===false)return t[0];
+ if(chosenExp==='dinner'&&chosenMenu==='summer'){
+  const w=state.summerWindow,d=$('guest-day').value;
+  if(!w)return t[1];
+  if(!d||d<w.start||d>w.end)return t[2]+' '+readable(w.start)+' – '+readable(w.end)+'.';
+ }
+ return '';
+}
+function updateRequestState(){$('guest-submit').disabled=!ready||submitted||!!requestNotice()}
 async function load(){
- try{const [s,c]=await Promise.all([api('/api/config'),api('/api/challenge')]);state=s;challenge=c.challenge;renderMenus();renderGuestSummary();calendar();applyConditions();
+ try{const s=await api('/api/config');state=s;challenge=s.requestsEnabled?(await api('/api/challenge')).challenge:'';renderMenus();renderGuestSummary();calendar();applyConditions();
   const dinner=state.menus.find(m=>m.id===chosenMenu);$('offer-dinner').querySelector('.offer-price').textContent=dinner?money(dinner.price):'—';$('offer-pasta').querySelector('.offer-price').textContent=money(s.pastaPrice);$('offer-pasta').querySelector('.oldprice').textContent=money(s.referencePrice);document.querySelector('.pasta-stats strong').textContent=money(s.pastaPrice);document.querySelector('.pasta-stats s').textContent=money(s.referencePrice);
-  ready=true;$('guest-submit').disabled=submitted;
+  ready=true;renderGuestSummary();
  }catch{$('submit-error').hidden=false;$('submit-error').textContent=text('error');$('guest-submit').disabled=true}
 }
 $('guest-form').addEventListener('submit',async e=>{
- e.preventDefault();if(!ready||submitted||!e.currentTarget.reportValidity())return;
+ e.preventDefault();if(!ready||submitted||requestNotice()||!e.currentTarget.reportValidity())return;
  const m=menuOf(chosenMenu);if(chosenExp==='dinner'&&!m)return;
  const data={experience:chosenExp,menuId:chosenExp==='dinner'?chosenMenu:null,people:Number($('guest-people').value),name:$('guest-name').value.trim(),email:$('guest-email').value.trim(),phone:$('guest-phone').value.trim(),checkin:$('guest-checkin').value,checkout:$('guest-checkout').value,date:$('guest-day').value,notes:$('guest-notes').value.trim(),lang:selectedLanguage,time:$('guest-time').value,privacy:$('guest-privacy').checked,expectedUnit:chosenExp==='dinner'?m.price:state.pastaPrice};
  if(blocked(data.date)||data.date<data.checkin||data.date>=data.checkout||data.date<todayISO()){$('submit-error').hidden=false;$('submit-error').textContent=text('unavailable');return}
@@ -89,7 +107,7 @@ $('guest-form').addEventListener('submit',async e=>{
  const key=prior?.fp===fp?prior.key:crypto.randomUUID();try{sessionStorage.setItem('vm-submit',JSON.stringify({fp,key}))}catch{}
  $('guest-submit').disabled=true;$('guest-submit').textContent=text('wait');$('submit-error').hidden=true;
  try{const result=await api('/api/requests',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({...data,challenge,website:$('website').value})});if(!result.registered)throw new Error(text('error'));submitted=true;$('request-result').classList.add('show');$('request-success').textContent=text('ok')+' '+result.id+' · '+money(result.initial/100);$('request-result').scrollIntoView({behavior:'smooth',block:'center'})}
- catch(err){$('submit-error').hidden=false;$('submit-error').textContent=selectedLanguage==='it'?err.message:text('error');$('guest-submit').disabled=false}
+ catch(err){$('submit-error').hidden=false;$('submit-error').textContent=selectedLanguage==='it'?err.message:text('error');updateRequestState()}
  finally{$('guest-submit').textContent=text('sendEmail')}
 });
 ['guest-checkin','guest-checkout'].forEach(id=>$(id).addEventListener('change',()=>{const a=$('guest-checkin').value,b=$('guest-checkout').value;$('guest-day').min=a||todayISO();if(b){const end=new Date(b+'T12:00:00Z');end.setUTCDate(end.getUTCDate()-1);$('guest-day').max=end.toISOString().slice(0,10)}if(a){calendarYear=Number(a.slice(0,4));calendarMonth=Number(a.slice(5,7))}calendar()}));

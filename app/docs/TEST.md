@@ -1,5 +1,8 @@
 # Verifiche del 5 novembre 2026 — preparazione D1 TEST
 
+> Aggiornamento 11 novembre 2026: [preparazione email e TEST](PREPARAZIONE-EMAIL-TEST.md) descrive il codice attuale, Resend isolato, finestra estiva e procedura successiva. Le indicazioni storiche sottostanti non verificano lo stato del Worker pubblicato e non prevalgono sulla configurazione TEST reale.
+
+
 ## Esito aggiornato
 
 - Base recuperata con connettore GitHub e verificata file per file tramite hash Git; albero `c0efe0aa573f6c4a1b9ef89ad0a5e21cba81c807` e commit esatto `7162a991b279ac3fddc1728cbe7e68601e46a797`. Checkout isolato in `codex/simonetta-d1-test`; nessuna modifica ai file pubblici fuori da `app/`.

@@ -1,5 +1,8 @@
 # Ambiente TEST Simonetta — guida semplice
 
+> Aggiornamento 11 novembre 2026: [preparazione email e TEST](PREPARAZIONE-EMAIL-TEST.md) descrive il codice attuale, Resend isolato, finestra estiva e procedura successiva. Le indicazioni storiche sottostanti non verificano lo stato del Worker pubblicato e non prevalgono sulla configurazione TEST reale.
+
+
 Preparazione completata il 5 novembre 2026. Nessuna operazione remota è stata eseguita.
 Il database già creato è collegato nella configurazione: non bisogna crearne un altro.
 

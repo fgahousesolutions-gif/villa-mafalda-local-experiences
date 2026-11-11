@@ -16,21 +16,30 @@ export async function mailRows(db,env,r,kinds,token=''){
  for(const kind of kinds){const message=email(kind,r,env,token);if(!message.to||!message.from)throw Object.assign(new Error('Configurazione email incompleta.'),{status:503});rows.push({kind,id:crypto.randomUUID(),payload:await seal(env.OUTBOX_KEY,message),created:now,request_id:r.id})}return rows;
 }
 export function enqueue(db,rows,condition='1',params=[]){return rows.map(row=>db.prepare(`INSERT INTO outbox(id,request_id,payload,kind,next_at,created) SELECT ?,?,?,?,?,? WHERE ${condition}`).bind(row.id,row.request_id,row.payload,row.kind,row.created,row.created,...params))}
-export async function deliver(env){
- // TEST remains unable to send even if an email binding is added by mistake.
- if(env.APP_ENV==='test'||env.EMAIL_MODE!=='service'||!env.EMAIL_SERVICE)return;
+// Injectable transport for local tests; runtime uses the fixed Resend endpoint.
+export async function deliver(env,transport=fetch){
+ if(env.APP_ENV==='test')return;
+ const resend=env.APP_ENV==='production'&&env.EMAIL_MODE==='resend'&&!!env.RESEND_API_KEY;
+ const service=env.EMAIL_MODE==='service'&&!!env.EMAIL_SERVICE;
+ if(!resend&&!service)return;
  const db=env.DB,now=Date.now();
  const rows=(await db.prepare("SELECT * FROM outbox WHERE state IN ('pending','retry') AND next_at<=? AND lease_until<? LIMIT 20").bind(now,now).all()).results;
  for(const r of rows){
-  const lease=await db.prepare("UPDATE outbox SET lease_until=?,attempts=attempts+1 WHERE id=? AND lease_until<? AND state IN ('pending','retry')").bind(now+120000,r.id,now).run();if(!lease.meta.changes)continue;
+  // Resend only retains idempotency keys for 24h. Never retry beyond 23h,
+  // including recovery after a successful send whose DB acknowledgement was lost.
+  if(r.first_attempt_at!==null&&now-r.first_attempt_at>=23*3600000){
+   await db.prepare("UPDATE outbox SET state='review',last_error='IDEMPOTENCY_WINDOW_EXPIRED' WHERE id=? AND lease_until<? AND state IN ('pending','retry')").bind(r.id,now).run();continue;
+  }
+  const lease=await db.prepare("UPDATE outbox SET lease_until=?,attempts=attempts+1,first_attempt_at=COALESCE(first_attempt_at,?) WHERE id=? AND lease_until<? AND state IN ('pending','retry')").bind(now+120000,now,r.id,now).run();if(!lease.meta.changes)continue;
   try{
    const payload=await unseal(env.OUTBOX_KEY,r.payload);
-   // Internal service-binding contract. The configured adapter implements the real provider.
-   const res=await env.EMAIL_SERVICE.fetch(new Request('https://email-adapter.internal/send',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':r.id},body:JSON.stringify(payload)}));
-   if(!res.ok)throw new Error('PROVIDER_'+res.status);
-   await db.prepare("UPDATE outbox SET state='sent',payload='',lease_until=0,last_error=NULL WHERE id=?").bind(r.id).run();
-  }catch{
-   await db.prepare("UPDATE outbox SET state='retry',lease_until=0,next_at=?,last_error='DELIVERY_FAILED' WHERE id=?").bind(now+Math.min(86400000,60000*2**Math.min(r.attempts,10)),r.id).run();
+   let providerId=null;
+   const res=resend?await transport('https://api.resend.com/emails',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':r.id},body:JSON.stringify({from:payload.from,to:[payload.to],reply_to:payload.replyTo,subject:payload.subject,text:payload.text,html:payload.html})}):await env.EMAIL_SERVICE.fetch(new Request('https://email-adapter.internal/send',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':r.id},body:JSON.stringify(payload)}));
+   if(!res.ok)throw Object.assign(new Error('DELIVERY_FAILED'),{permanent:resend&&res.status>=400&&res.status<500&&![408,409,429].includes(res.status)});
+   if(resend){const data=await res.json();if(typeof data.id!=='string'||!data.id||data.id.length>200)throw new Error('INVALID_PROVIDER_RESPONSE');providerId=data.id}
+   await db.prepare("UPDATE outbox SET state='sent',payload='',lease_until=0,last_error=NULL,provider_id=? WHERE id=?").bind(providerId,r.id).run();
+  }catch(e){
+   await db.prepare("UPDATE outbox SET state=?,lease_until=0,next_at=?,last_error=? WHERE id=?").bind(e.permanent?'review':'retry',now+Math.min(3600000,60000*2**Math.min(r.attempts,6)),e.permanent?'PROVIDER_REJECTED':'DELIVERY_FAILED',r.id).run();
   }
  }
 }

@@ -1,5 +1,8 @@
 # Email: ricerca e collegamento futuro
 
+> Aggiornamento 11 novembre 2026: [preparazione email e TEST](PREPARAZIONE-EMAIL-TEST.md) descrive il codice attuale, Resend isolato, finestra estiva e procedura successiva. Le indicazioni storiche sottostanti non verificano lo stato del Worker pubblicato e non prevalgono sulla configurazione TEST reale.
+
+
 ## Ricerca in sola lettura del 5 novembre 2026
 
 Sono stati elencati i repository accessibili di `fgahousesolutions-gif`. Sono stati ispezionati alberi e file pertinenti senza modificare altri progetti né leggere segreti:
