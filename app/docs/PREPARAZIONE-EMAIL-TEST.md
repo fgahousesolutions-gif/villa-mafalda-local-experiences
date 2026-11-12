@@ -49,6 +49,10 @@ I primi tentativi di workerd e logging Wrangler sono stati limitati dalla sandbo
 - **Prima di pubblicare l'informativa definitiva:** inserire il titolare **Francesco Cocchi** (P. IVA personale, nome commerciale F.G.A. House Solutions) e il recapito privacy **fgahousesolutions@gmail.com**; disciplinare l'accesso completo di Laura; spiegare la comunicazione dei dati a Simonetta quale destinataria e titolare autonoma del proprio servizio; valutare come Simonetta fornisce la sua informativa; verificare basi giuridiche, Resend/Cloudflare, conservazione ed eventuali trasferimenti. Serve convalida dei ruoli effettivi e della documentazione applicabile.
 - **Nessuna attivazione tecnica da questa decisione:** lasciare `PRIVACY_READY=false` e non aggiungere dati personali a `wrangler.test.jsonc` di GitHub, che non è la configurazione reale del Mac.
 
+## Decisione conservazione dati — 12 novembre 2026
+
+Il titolare ha scelto **non oltre sei mesi come termine ordinario**. Parametro tecnico proposto per la produzione: `RETENTION_DAYS=180`; il manifest di produzione è stato predisposto in tal senso, **senza deploy**. Il TEST online mantiene il proprio valore precedente e continua a non raccogliere richieste reali. La retention attuale cancella le richieste eliminate/rifiutate e quelle completate e regolate in base a `created`, ma **non tutte le richieste confermate**; vanno rivisti la decorrenza rispetto alla conclusione dell'esperienza, i casi ancora in corso, gli eventuali obblighi contabili e la cancellazione di outbox/audit prima di affermare che il limite è rispettato. Realizzare test automatici sui vari stati. La bozza informativa è in `PRIVACY-BOZZA.md`.
+
 ## Aggiornare successivamente il solo TEST online
 
 Operazioni future, **non eseguite**, da fare solo dopo autorizzazione:
