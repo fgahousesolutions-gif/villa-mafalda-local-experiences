@@ -3,6 +3,7 @@ import {booking,fail,str,date,cents,today,report} from './domain.mjs';
 import {mailRows,enqueue,deliver} from './mail.mjs';
 import {pdf} from './pdf.mjs';
 import {privacy} from './privacy.mjs';
+import {cleanup} from './retention.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8'}});
 const all=async(db,sql,...args)=>(await db.prepare(sql).bind(...args).all()).results;
 const one=(db,sql,...args)=>db.prepare(sql).bind(...args).first();
@@ -61,7 +62,7 @@ async function change(req,env,ctx,r,actor,admin=false){
  const updated={...r,status:b.status,final,message};const notify=['requested'].includes(r.status)&&['confirmed','declined'].includes(b.status);
  const mails=notify?await mailRows(db,env,updated,['guest','laura']):[];
  const op=crypto.randomUUID();
- const statements=[db.prepare('UPDATE requests SET status=?,final=?,message=?,confirmed_at=CASE WHEN ?=\'confirmed\' THEN ? ELSE confirmed_at END,completed_at=CASE WHEN ?=\'completed\' THEN ? ELSE completed_at END,version=version+1 WHERE id=? AND version=?').bind(b.status,final,message,b.status,now,b.status,now,r.id,r.version),db.prepare('INSERT INTO audit(request_id,actor,action,data,created) SELECT ?,?,?,?,? WHERE changes()=1').bind(r.id,actor,'request.updated:'+op,JSON.stringify({from:r.status,to:b.status,oldFinal:r.final,final,reason}),now),...enqueue(db,mails,'EXISTS(SELECT 1 FROM audit WHERE action=?)',['request.updated:'+op])];
+ const statements=[db.prepare('UPDATE requests SET status=?,final=?,message=?,confirmed_at=CASE WHEN ?=\'confirmed\' THEN ? ELSE confirmed_at END,completed_at=CASE WHEN ?=\'completed\' THEN ? ELSE completed_at END,closed_at=CASE WHEN ? IN (\'declined\',\'cancelled\') THEN ? ELSE closed_at END,version=version+1 WHERE id=? AND version=?').bind(b.status,final,message,b.status,now,b.status,now,b.status,now,r.id,r.version),db.prepare('INSERT INTO audit(request_id,actor,action,data,created) SELECT ?,?,?,?,? WHERE changes()=1').bind(r.id,actor,'request.updated:'+op,JSON.stringify({from:r.status,to:b.status,oldFinal:r.final,final,reason}),now),...enqueue(db,mails,'EXISTS(SELECT 1 FROM audit WHERE action=?)',['request.updated:'+op])];
  const result=await db.batch(statements);if(!result[0].meta.changes)fail('La richiesta è già stata aggiornata.',409);ctx.waitUntil(deliver(env));return json({ok:true,status:b.status});
 }
 function validateMenu(b,id){
@@ -133,5 +134,5 @@ export default {
  async fetch(req,env,ctx){let res;try{res=await route(req,env,ctx)}catch(e){const known=/DATE_UNAVAILABLE|MENU_CHANGED|SUMMER_UNAVAILABLE|PRICE_CHANGED|INVALID_PAYMENT|PAYMENTS_EXIST/.test(e.message);res=json({error:e.status?e.message:known?'Operazione non consentita: controlla disponibilità, importi e pagamenti già registrati.':'Servizio temporaneamente non disponibile. La registrazione non è stata confermata; riprova con gli stessi dati.',code:e.status|| (known?409:503)},e.status||(known?409:503))}
   const headers=new Headers(res.headers);headers.set('Cache-Control','no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','no-referrer');headers.set('X-Frame-Options','DENY');headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://storage.googleapis.com; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");return new Response(res.body,{status:res.status,headers});
  },
- async scheduled(event,env,ctx){ctx.waitUntil((async()=>{await deliver(env);const days=Number(env.RETENTION_DAYS);if(!Number.isInteger(days)||days<30||days>3650)return;const cutoff=Date.now()-days*86400000;await env.DB.batch([env.DB.prepare("DELETE FROM requests WHERE created<? AND status IN ('declined','cancelled','requested')").bind(cutoff),env.DB.prepare("DELETE FROM requests WHERE created<? AND status='completed' AND (experience='pasta' OR COALESCE((SELECT SUM(cents) FROM payments WHERE request_id=requests.id),0)>=CAST(ROUND(final*0.1) AS INTEGER))").bind(cutoff),env.DB.prepare('DELETE FROM audit WHERE created<?').bind(cutoff),env.DB.prepare('DELETE FROM rate_limits WHERE expires<?').bind(Date.now())])})())}
+ async scheduled(event,env,ctx){ctx.waitUntil((async()=>{await deliver(env);await cleanup(env)})())}
 };
