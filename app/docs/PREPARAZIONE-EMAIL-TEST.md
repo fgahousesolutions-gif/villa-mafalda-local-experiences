@@ -40,6 +40,15 @@ I primi tentativi di workerd e logging Wrangler sono stati limitati dalla sandbo
 
 **Blocco preventivo richieste (aggiornamento successivo al rilascio TEST):** la UI e l'endpoint POST usano lo stesso controllo. Online le richieste si possono abilitare solo con `APP_ENV=production`, privacy completa e `EMAIL_MODE=resend` con `RESEND_API_KEY` configurata, oppure `EMAIL_MODE=service` con binding `EMAIL_SERVICE` presente. Il TEST resta chiuso anche se `PRIVACY_READY` fosse attivato per errore. Le prove locali usano `APP_ENV=development`, `LOCAL_DEV=true` e `EMAIL_MODE=capture`, soltanto con origine HTTP di loopback. La presenza del trasporto non certifica la consegna: effettuare un test reale controllato prima del rilascio.
 
+## Decisioni operative privacy — 12 novembre 2026
+
+- **Titolare indicato dall'utente per la raccolta e gestione delle richieste sul sito:** Francesco Cocchi, nell'ambito di F.G.A. House Solutions. La dicitura legale definitiva dovrà corrispondere all'intestazione effettiva dell'attività e non viene presunta da questo documento.
+- **Laura:** mantiene l'accesso completo all'area amministrativa, compresi dati degli ospiti, stati delle richieste, prezzi, calendario, liquidazioni e rendiconti. È una persona da autorizzare espressamente al trattamento nell'ambito del ruolo svolto; non va oscurata l'area Laura.
+- **Simonetta Garelli:** riceve i dati necessari per valutare, confermare e organizzare il servizio. L'eventuale ruolo di titolare autonomo per i dati che usa per la propria attività deve essere valutato e formalizzato, senza presumere una contitolarità automatica.
+- **Proprietà Villa Mafalda:** non inserita automaticamente come titolare per il solo fatto di possedere l'immobile.
+- **Prima di pubblicare l'informativa definitiva:** verificare denominazione legale/partita IVA e recapito privacy del titolare; disciplinare l'accesso di Laura e la comunicazione a Simonetta; verificare basi giuridiche, Resend/Cloudflare, conservazione ed eventuali trasferimenti. Serve convalida giuridica delle qualificazioni adottate.
+- **Nessuna attivazione tecnica da questa decisione:** lasciare `PRIVACY_READY=false` e non aggiungere dati personali a `wrangler.test.jsonc` di GitHub, che non è la configurazione reale del Mac.
+
 ## Aggiornare successivamente il solo TEST online
 
 Operazioni future, **non eseguite**, da fare solo dopo autorizzazione:
