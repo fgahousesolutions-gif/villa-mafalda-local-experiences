@@ -31,7 +31,56 @@ test('Commissione solo svolta e pagata, pasta zero, pagamenti parziali e PDF',as
 test('Pasta 200 euro, nessuna commissione anche dopo completamento',async()=>{const env=environment(auth),x=await create(env,{experience:'pasta',menuId:null,expectedUnit:200,people:6});assert.equal(x.result.initial,120000);await confirmRow(env,x.result.id);await complete(env,x.result.id);const r=await (await admin(env,'report?month=2027-06')).json();assert.equal(r.fees,0);assert.equal((await admin(env,'payments','POST',{id:crypto.randomUUID(),requestId:x.result.id,amount:10,date:'2026-11-04',reference:''})).status,409)});
 test('Email disabilitate in sviluppo, retry con idempotenza e nessun contenuto in log',async()=>{const env=environment(auth);await create(env);await deliver(env);assert.equal((await env.DB.prepare("SELECT count(*) n FROM outbox WHERE state='pending'").first()).n,2);const delivered=[];env.EMAIL_MODE='service';env.EMAIL_SERVICE={async fetch(req){delivered.push({key:req.headers.get('Idempotency-Key'),message:await req.json()});return Response.json({accepted:true})}};await deliver(env);assert.equal(delivered.length,2);assert.equal((await env.DB.prepare("SELECT count(*) n FROM outbox WHERE state='sent' AND payload=''").first()).n,2);await deliver(env);assert.equal(delivered.length,2)});
 test('Protezione rate limit e privacy non pronta',async()=>{const env=environment(auth);env.PRIVACY_READY='false';assert.equal((await create(env)).response.status,503);env.PRIVACY_READY='true';let last;for(let i=0;i<9;i++)last=await create(env);assert.equal(last.response.status,429)});
-test('Retenzione: rimozione dati terminali scaduti; debiti aperti conservati',async()=>{const env=environment(auth),x=await create(env);await confirmRow(env,x.result.id);await complete(env,x.result.id);await env.DB.prepare('UPDATE requests SET created=0').run();let task;worker.scheduled(null,env,{waitUntil:p=>task=p});await task;assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,1);await admin(env,'payments','POST',{id:crypto.randomUUID(),requestId:x.result.id,amount:120,date:'2026-11-04',reference:''});worker.scheduled(null,env,{waitUntil:p=>task=p});await task;assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,0);assert.equal((await env.DB.prepare('SELECT count(*) n FROM outbox').first()).n,0)});
+async function scheduledCleanup(env){let task;worker.scheduled(null,env,{waitUntil:p=>{task=p}});await task}
+test('Retenzione: 180 giorni da conclusione, commissioni aperte protette e audit cancellato a saldo',async()=>{
+ const env=environment(auth),x=await create(env);await confirmRow(env,x.result.id);await complete(env,x.result.id);
+ await env.DB.prepare("UPDATE requests SET created=0,completed_at=0,date='2025-04-01',checkin='2025-03-31',checkout='2025-04-02'").run();
+ await env.DB.prepare('UPDATE audit SET created=0').run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,1);
+ assert.ok((await env.DB.prepare('SELECT count(*) n FROM audit WHERE request_id=?').bind(x.result.id).first()).n>0);
+ await admin(env,'payments','POST',{id:crypto.randomUUID(),requestId:x.result.id,amount:120,date:'2026-11-04',reference:''});
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,0);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM outbox').first()).n,0);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM audit WHERE request_id=?').bind(x.result.id).first()).n,0);
+});
+test('Retenzione: richieste anticipate non eliminate prima della data esperienza',async()=>{
+ const env=environment(auth);await create(env);
+ await env.DB.prepare('UPDATE requests SET created=0').run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,1);
+ await env.DB.prepare("UPDATE requests SET date='2025-04-01',checkin='2025-03-31',checkout='2025-04-02'").run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,0);
+});
+test('Retenzione: rifiuto recente preservato 180 giorni dalla chiusura, non dall\'invio',async()=>{
+ const env=environment(auth),x=await create(env),{token}=await tokenFor(env,x.result.id);
+ assert.equal((await call(env,'/api/confirm','POST',{version:1,status:'declined'},{Authorization:'Bearer '+token})).status,200);
+ const closed=await env.DB.prepare('SELECT closed_at FROM requests').first();assert.ok(closed.closed_at>Date.now()-120000);
+ await env.DB.prepare('UPDATE requests SET created=0').run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,1);
+ await env.DB.prepare('UPDATE requests SET closed_at=0').run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,0);
+});
+test('Retenzione: confermata dimenticata, cancellata dopo la data esperienza e 180 giorni',async()=>{
+ const env=environment(auth),x=await create(env);await confirmRow(env,x.result.id);
+ await env.DB.prepare("UPDATE requests SET created=0,confirmed_at=0,date='2025-04-01',checkin='2025-03-31',checkout='2025-04-02'").run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,0);
+});
+test('Retenzione: completamento recente conserva la pratica anche se la richiesta è vecchia',async()=>{
+ const env=environment(auth),x=await create(env);await confirmRow(env,x.result.id);await complete(env,x.result.id);
+ await admin(env,'payments','POST',{id:crypto.randomUUID(),requestId:x.result.id,amount:120,date:'2026-11-04',reference:''});
+ await env.DB.prepare("UPDATE requests SET created=0,date='2025-04-01',checkin='2025-03-31',checkout='2025-04-02'").run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,1);
+ await env.DB.prepare('UPDATE requests SET completed_at=0').run();
+ await scheduledCleanup(env);
+ assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,0);
+});
 test('Concorrenza: stesso invio salva una sola richiesta e conferma CAS vince una volta',async()=>{const env=environment(auth),key=crypto.randomUUID(),b={...valid(),challenge:await challenge(env)};const results=await Promise.all([call(env,'/api/requests','POST',b,{'Idempotency-Key':key}),call(env,'/api/requests','POST',b,{'Idempotency-Key':key})]);assert.ok(results.every(r=>[200,201].includes(r.status)));const saved=await Promise.all(results.map(r=>r.json()));assert.equal(saved[0].id,saved[1].id);assert.equal((await env.DB.prepare('SELECT count(*) n FROM requests').first()).n,1);assert.equal((await env.DB.prepare('SELECT count(*) n FROM outbox').first()).n,2);const {token}=await tokenFor(env,saved[0].id),confirmations=await Promise.all([call(env,'/api/confirm','POST',{version:1,status:'confirmed',final:1000},{Authorization:'Bearer '+token}),call(env,'/api/confirm','POST',{version:1,status:'confirmed',final:1500},{Authorization:'Bearer '+token})]);assert.deepEqual(confirmations.map(r=>r.status).sort(),[200,409]);assert.equal((await env.DB.prepare('SELECT count(*) n FROM outbox').first()).n,4)});
 test('Date malformate e indisponibilità aggiunta dopo la richiesta',async()=>{assert.equal(date('2027-99-99'),false);assert.equal(date('2027-02-30'),false);const env=environment(auth),x=await create(env),{token}=await tokenFor(env,x.result.id);await admin(env,'blocks','POST',{start:'2027-06-12',end:'2027-06-12',experience:'all',reason:'Imprevisto fittizio'});const res=await call(env,'/api/confirm','POST',{version:1,status:'confirmed',final:1200},{Authorization:'Bearer '+token});assert.equal(res.status,409);assert.equal((await env.DB.prepare('SELECT status FROM requests').first()).status,'requested')});
 test('Pagamento idempotente e notifiche fallite ritentabili senza perdita',async()=>{const env=environment(auth),x=await create(env);await confirmRow(env,x.result.id);await complete(env,x.result.id);const b={id:crypto.randomUUID(),requestId:x.result.id,amount:30,date:'2026-11-04',reference:'Bonifico fittizio'};assert.equal((await admin(env,'payments','POST',b)).status,201);assert.equal((await admin(env,'payments','POST',b)).status,200);assert.equal((await env.DB.prepare('SELECT count(*) n FROM payments').first()).n,1);env.EMAIL_MODE='service';env.EMAIL_SERVICE={fetch:async()=>new Response('error',{status:503})};await deliver(env);assert.equal((await env.DB.prepare("SELECT count(*) n FROM outbox WHERE state='retry'").first()).n,4);assert.ok((await env.DB.prepare('SELECT payload FROM outbox LIMIT 1').first()).payload);await env.DB.prepare('UPDATE outbox SET next_at=0').run();env.EMAIL_SERVICE={fetch:async()=>new Response('ok')};await deliver(env);assert.equal((await env.DB.prepare("SELECT count(*) n FROM outbox WHERE state='sent'").first()).n,4)});
