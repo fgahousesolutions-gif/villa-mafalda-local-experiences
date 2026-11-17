@@ -5,8 +5,16 @@
   "compatibility_date": "2026-10-01",
   "workers_dev": false,
   "preview_urls": false,
+  "routes": [{"pattern": "simonetta.fgahousesolutions.it", "custom_domain": true}],
   "assets": {"directory": "public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none"},
-  "vars": {"EMAIL_MODE": "disabled", "RETENTION_DAYS": "180", "TOKEN_HOURS": "168", "PRIVACY_READY": "false"},
-  "d1_databases": [{"binding": "DB", "database_name": "villa-mafalda-simonetta", "database_id": "REPLACE_BEFORE_RELEASE", "migrations_dir": "migrations"}],
+  "vars": {
+    "APP_ENV": "production",
+    "EMAIL_MODE": "disabled",
+    "RETENTION_DAYS": "180",
+    "TOKEN_HOURS": "168",
+    "PRIVACY_READY": "false",
+    "PUBLIC_ORIGIN": "https://simonetta.fgahousesolutions.it"
+  },
+  "d1_databases": [{"binding": "DB", "database_name": "villa-mafalda-simonetta", "database_id": "2af03de7-dfb9-4dfb-ad31-31d409ab3d1b", "migrations_dir": "migrations"}],
   "triggers": {"crons": ["*/5 * * * *"]}
 }
