@@ -9,10 +9,10 @@
   "assets": {"directory": "public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none"},
   "vars": {
     "APP_ENV": "production",
-    "EMAIL_MODE": "disabled",
+    "EMAIL_MODE": "resend",
     "RETENTION_DAYS": "180",
     "TOKEN_HOURS": "168",
-    "PRIVACY_READY": "false",
+    "PRIVACY_READY": "true",
     "PUBLIC_ORIGIN": "https://simonetta.fgahousesolutions.it"
   },
   "d1_databases": [{"binding": "DB", "database_name": "villa-mafalda-simonetta", "database_id": "2af03de7-dfb9-4dfb-ad31-31d409ab3d1b", "migrations_dir": "migrations"}],
