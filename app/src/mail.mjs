@@ -35,11 +35,11 @@ export async function deliver(env,transport=fetch){
    const payload=await unseal(env.OUTBOX_KEY,r.payload);
    let providerId=null;
    const res=resend?await transport('https://api.resend.com/emails',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':r.id},body:JSON.stringify({from:payload.from,to:[payload.to],reply_to:payload.replyTo,subject:payload.subject,text:payload.text,html:payload.html})}):await env.EMAIL_SERVICE.fetch(new Request('https://email-adapter.internal/send',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':r.id},body:JSON.stringify(payload)}));
-   if(!res.ok)throw Object.assign(new Error('DELIVERY_FAILED'),{permanent:resend&&res.status>=400&&res.status<500&&![408,409,429].includes(res.status)});
+   if(!res.ok)throw Object.assign(new Error('DELIVERY_FAILED'),{httpStatus:res.status,permanent:resend&&res.status>=400&&res.status<500&&![408,409,429].includes(res.status)});
    if(resend){const data=await res.json();if(typeof data.id!=='string'||!data.id||data.id.length>200)throw new Error('INVALID_PROVIDER_RESPONSE');providerId=data.id}
    await db.prepare("UPDATE outbox SET state='sent',payload='',lease_until=0,last_error=NULL,provider_id=? WHERE id=?").bind(providerId,r.id).run();
   }catch(e){
-   await db.prepare("UPDATE outbox SET state=?,lease_until=0,next_at=?,last_error=? WHERE id=?").bind(e.permanent?'review':'retry',now+Math.min(3600000,60000*2**Math.min(r.attempts,6)),e.permanent?'PROVIDER_REJECTED':'DELIVERY_FAILED',r.id).run();
+   await db.prepare("UPDATE outbox SET state=?,lease_until=0,next_at=?,last_error=? WHERE id=?").bind(e.permanent?'review':'retry',now+Math.min(3600000,60000*2**Math.min(r.attempts,6)),e.httpStatus?('HTTP_'+e.httpStatus):e.message==='INVALID_PROVIDER_RESPONSE'?'INVALID_PROVIDER_RESPONSE':e.message==='SECURITY_CONFIGURATION'?'SECURITY_CONFIGURATION':e.name==='OperationError'?'DECRYPT_FAILURE':e.name==='TimeoutError'?'TIMEOUT':e.name==='TypeError'?'NETWORK_OR_TYPE_ERROR':e.permanent?'PROVIDER_REJECTED':'WORKER_DELIVERY_ERROR',r.id).run();
   }
  }
 }
