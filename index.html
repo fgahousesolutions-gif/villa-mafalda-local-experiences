@@ -33,7 +33,7 @@ $('cards').replaceChildren(...SLUGS.map((slug,i)=>{const article=document.create
 const photo=document.createElement('div');photo.className='card-photo';const img=document.createElement('img');img.src=IMAGES[i];img.alt=NAMES[i];img.loading='lazy';img.onerror=()=>img.remove();photo.append(img);
 const content=document.createElement('div');content.className='card-content';const tag=document.createElement('div');tag.className='tag';tag.textContent=t[['oneCat','twoCat','threeCat'][i]];
 const h=document.createElement('h3');h.textContent=NAMES[i];const p=document.createElement('p');p.textContent=t[['oneDesc','twoDesc','threeDesc'][i]];
-const a=document.createElement('a');a.href=slug+'/index.html?lang='+encodeURIComponent(lang);a.textContent=t.discover+' ↗';
+const a=document.createElement('a');a.href=(slug==='acetaia-sereni'?'https://villa-mafalda-sereni.fgahousesolutions.workers.dev/':slug+'/index.html')+'?lang='+encodeURIComponent(lang);a.textContent=t.discover+' ↗';
 content.append(tag,h,p,a);article.append(photo,content);return article;}));
 $('steps-title').textContent=t.stepsTitle;$('steps-intro').textContent=t.stepsIntro;
 $('steps').replaceChildren(...[1,2,3].map(i=>{const el=document.createElement('div');el.className='step';const n=document.createElement('span');n.className='n';n.textContent=String(i).padStart(2,'0');const h=document.createElement('h3');h.textContent=t['s'+i];const p=document.createElement('p');p.textContent=t['s'+i+'Desc'];el.append(n,h,p);return el}));
