@@ -1,0 +1,19 @@
+{
+  "name": "villa-mafalda-sereni",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-24",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/go/*"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "villa-mafalda-sereni-clicks",
+      "database_id": "cf722077-d582-49b7-a2fd-4c90930d32c4"
+    }
+  ]
+}
